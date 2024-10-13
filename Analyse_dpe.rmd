@@ -1,0 +1,184 @@
+---
+title: "Rapport sur les Logements (DPE)"
+author: "Votre Nom"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+# Introduction
+
+Ce rapport présente une analyse des diagnostics de performance énergétique (DPE) pour les logements anciens et neufs dans le Rhône. Il inclut des visualisations, des statistiques bivariées et des KPI clés pour mieux comprendre les coûts énergétiques.
+
+# Chargement des Bibliothèques
+
+```{r message=FALSE, warning=FALSE}
+# Chargement des bibliothèques nécessaires
+library(shiny)
+library(shinydashboard)
+library(shinythemes)
+library(leaflet)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(shinyjs)
+library(httr)
+library(jsonlite)
+library(shinymanager)
+library(sf)
+```
+# Fonction pour récupérer les données
+```{r message=FALSE, warning=FALSE}
+get_logements_data <- function() {
+  
+  # Création d'un vecteur avec les codes postaux du Rhône
+  codes_postaux_69 <- c(
+    69001, 69002, 69003, 69004, 69005, 69006, 69007, 69008, 69009,
+    69100, 69110, 69120, 69140, 69160, 69170, 69190, 69200,
+    69210, 69220, 69230, 69240, 69260, 69310, 69320, 69330,
+    69340, 69350, 69360, 69370, 69380, 69390, 69400, 69410,
+    69420, 69430, 69440, 69450, 69460, 69500, 69510, 69520,
+    69530, 69540, 69560, 69570, 69580, 69590, 69600, 69610,
+    69620, 69630, 69640, 69650, 69660, 69670, 69680, 69690
+  )
+  
+  logement_existant <- data.frame()
+  logement_neuf <- data.frame()
+  
+  # Boucle pour chaque code postal (logements existants)
+  for(valeur in codes_postaux_69){
+    base_url <- "https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines"
+    params <- list(
+      page = 1,
+      size = 10000,
+      select = "N°DPE,Code_postal_(BAN),Etiquette_DPE,Date_réception_DPE,Type_bâtiment,Coordonnée_cartographique_X_(BAN),Coordonnée_cartographique_Y_(BAN),Coût_total_5_usages,Coût_chauffage,Coût_éclairage,Coût_ECS,Coût_refroidissement,Coût_auxiliaires,Type_énergie_n°1",
+      q = valeur,
+      q_fields = "Code_postal_(BAN)",
+      qs = "Date_réception_DPE:[2022-01-01 TO 2023-01-02]"
+    )
+    
+    url_encoded <- modify_url(base_url, query = params)
+    response <- GET(url_encoded)
+    content <- fromJSON(rawToChar(response$content), flatten = FALSE)
+    
+    df <- content$result
+    if (!is.null(df)) {
+      logement_existant <- rbind(logement_existant, as.data.frame(df))
+    }
+  }
+  
+  # Boucle pour chaque code postal (logements neufs)
+  for(valeur in codes_postaux_69){
+    base_url <- "https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-neufs/lines"
+    params <- list(
+      page = 1,
+      size = 10000,
+      select = "N°DPE,Code_postal_(BAN),Etiquette_DPE,Date_réception_DPE,Type_bâtiment,Coordonnée_cartographique_X_(BAN),Coordonnée_cartographique_Y_(BAN),Coût_total_5_usages,Coût_chauffage,Coût_éclairage,Coût_ECS,Coût_refroidissement,Coût_auxiliaires,Type_énergie_n°1",
+      q = valeur,
+      q_fields = "Code_postal_(BAN)",
+      qs = "Date_réception_DPE:[2023-01-01 TO 2023-01-02]"
+    )
+    
+    url_encoded <- modify_url(base_url, query = params)
+    response <- GET(url_encoded)
+    content <- fromJSON(rawToChar(response$content), flatten = FALSE)
+    
+    df <- content$result
+    if (!is.null(df)) {
+      logement_neuf <- rbind(logement_neuf, as.data.frame(df))
+    }
+  }
+  
+  logement_neuf$Logement = "Neuf"
+  logement_existant$Logement = "Ancien"
+  
+  # Conversion des dates et types
+  logement_neuf$Année_construction = Sys.Date()
+  logement_neuf$Année_construction = format(logement_neuf$Année_construction, "%Y")
+  logement_neuf$Année_construction = as.numeric(logement_neuf$Année_construction)
+  
+  # Conversion des coordonnées en sf et en WGS84
+  if ("Coordonnée_cartographique_X_(BAN)" %in% colnames(logement_neuf) &&
+      "Coordonnée_cartographique_Y_(BAN)" %in% colnames(logement_neuf)) {
+    
+    logements_neuf_sf <- st_as_sf(logement_neuf, coords = c("Coordonnée_cartographique_X_(BAN)", "Coordonnée_cartographique_Y_(BAN)"), crs = 2154) # Lambert-93
+    logements_neuf_geo <- st_transform(logements_neuf_sf, crs = 4326) # WGS84
+    
+    # Extraire les coordonnées
+    logement_neuf$latitude <- st_coordinates(logements_neuf_geo)[,2]
+    logement_neuf$longitude <- st_coordinates(logements_neuf_geo)[,1]
+  }
+  
+  # Idem pour logement_existant
+  if ("Coordonnée_cartographique_X_(BAN)" %in% colnames(logement_existant) &&
+      "Coordonnée_cartographique_Y_(BAN)" %in% colnames(logement_existant)) {
+    
+    logements_existant_sf <- st_as_sf(logement_existant, coords = c("Coordonnée_cartographique_X_(BAN)", "Coordonnée_cartographique_Y_(BAN)"), crs = 2154)
+    logements_existant_geo <- st_transform(logements_existant_sf, crs = 4326)
+    
+    # Extraire les coordonnées
+    logement_existant$latitude <- st_coordinates(logements_existant_geo)[,2]
+    logement_existant$longitude <- st_coordinates(logements_existant_geo)[,1]
+  }
+  
+  # Fusionner les données
+  colonnes_communes = intersect(colnames(logement_neuf), colnames(logement_existant))
+  logements = rbind(logement_neuf[, colonnes_communes], logement_existant[, colonnes_communes])
+  
+  return(logements)
+}
+
+logements_data <- get_logements_data()
+```
+# Filtrer les données par code postal et type de logement
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+
+input_code_postal <- 69001  # Vous pouvez automatiser ce choix avec shiny
+input_logement_type <- "Neuf"  # "Ancien", "Neuf" ou "Les deux"
+
+logements_filtered <- logements_data[logements_data$Code_postal_(BAN) == input_code_postal &
+                                     (logements_data$Logement == input_logement_type |
+                                      input_logement_type == "Les deux"), ]
+datatable(logements_filtered)
+```
+# Calcul des KPI principaux
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+
+kpi_cost_total <- mean(logements_filtered$Coût_total_5_usages, na.rm = TRUE)
+kpi_cost_heating <- mean(logements_filtered$Coût_chauffage, na.rm = TRUE)
+
+cat("Coût total moyen pour le code postal ", input_code_postal, ": ", round(kpi_cost_total, 2), "€", "\n")
+cat("Coût moyen de chauffage : ", round(kpi_cost_heating, 2), "€", "\n")
+```
+# Analyse de corrélation entre le coût de chauffage et d'autres variables
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+
+correlation_heating <- cor(logements_filtered$Coût_chauffage, logements_filtered$Coût_ECS, use = "complete.obs")
+cat("Coefficient de corrélation entre le coût de chauffage et ECS : ", round(correlation_heating, 2))
+```
+# Histogramme du coût total
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+
+ggplot(logements_filtered, aes(x = Coût_total_5_usages)) +
+  geom_histogram(binwidth = 100, fill = "blue", alpha = 0.7) +
+  labs(title = "Distribution du Coût Total des Logements",
+       x = "Coût Total",
+       y = "Fréquence")
+```
+# Nuage de points pour visualiser la relation entre le coût total et le coût de chauffage
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+
+plot_ly(logements_filtered, x = ~Coût_total_5_usages, y = ~Coût_chauffage, type = 'scatter', mode = 'markers') %>%
+  layout(title = "Nuage de points - Coût Total vs Coût de Chauffage")
+```
+# Carte des logements par type et code postal
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+
+leaflet(data = logements_filtered) %>%
+  addTiles() %>%
+  addCircleMarkers(~longitude, ~latitude, color = ~ifelse(Logement == "Neuf", "blue", "red"),
+                   popup = ~paste("Type:", Logement, "<br>", "Coordonnées:", latitude, longitude))
+```
