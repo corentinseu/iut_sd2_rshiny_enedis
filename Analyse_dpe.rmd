@@ -1,6 +1,6 @@
 ---
 title: "Rapport sur les Logements (DPE)"
-author: "Votre Nom"
+author: "Corentin et Okan"
 date: "`r format(Sys.Date(), '%d/%m/%Y')`"
 output: 
   html_document:
