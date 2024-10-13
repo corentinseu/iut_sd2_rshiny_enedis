@@ -141,7 +141,7 @@ ui <- dashboardPage(
       tabItem(tabName = "contexte",
               h2("Présentation des données disponibles"),
               sliderInput("cost_slider", "Filtrer par Coût total :", 
-                          min = 0, max = 10000, value = c(0, 10000)),  # Ajuster la plage selon les données
+                          min = 0, max = 10000, value = c(0, 10000)),
               DTOutput("table_donnees"),
               downloadButton("export_data", "Exporter les données en CSV")
       ),
@@ -320,64 +320,50 @@ server <- function(input, output, session) {
     new_data <- get_logements_data()
     logements_data(new_data)
   })
-  
-  # Appliquer le thème
-  observeEvent(input$apply_theme, {
-    shinyjs::runjs(paste0("document.body.style.backgroundColor = '", input$theme_color, "';"))
-  })
-  
-  # Fonction pour exporter les données filtrées
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      paste("logements_data", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      write.csv(logements_data(), file, row.names = FALSE)
-    }
-  )
-  
-  # Calculer le coefficient de corrélation et afficher le nuage de points avec la droite de régression
-  output$correlation <- renderText({
-    req(logements_data())  # Vérifier que les données sont disponibles
-    data <- logements_data()
-    
-    x_var <- input$x_var_reg
-    y_var <- input$y_var_reg
-    
-    # Calculer le coefficient de corrélation
-    correlation_value <- cor(data[[x_var]], data[[y_var]], use = "complete.obs")
-    
-    paste("Coefficient de corrélation (", x_var, " vs ", y_var, ") : ", round(correlation_value, 2))
-  })
-  
-  output$regression_plot <- renderPlot({
-    req(logements_data())  # Vérifier que les données sont disponibles
-    data <- logements_data()
-    
-    x_var <- input$x_var_reg
-    y_var <- input$y_var_reg
-    
-    # Créer le modèle de régression linéaire
-    model <- lm(data[[y_var]] ~ data[[x_var]], data = data)
-    
-    # Tracer le nuage de points et la droite de régression
-    ggplot(data, aes_string(x = x_var, y = y_var)) +
-      geom_point() +
-      geom_smooth(method = "lm", se = FALSE, color = "blue") +
-      labs(title = "Nuage de points avec droite de régression",
-           x = x_var,
-           y = y_var)
-  })
-  
-  observeEvent(input$apply_theme, {
-    # Supprimer toutes les classes de thème précédentes
-    shinyjs::runjs("$('#body').removeClass('blue red orange gray');")
-    
-    # Ajouter la classe correspondant au thème sélectionné
-    shinyjs::runjs(paste0("$('#body').addClass('", input$theme_color, "');"))
-  })
-}
 
+# Fonction pour exporter les données filtrées
+output$downloadData <- downloadHandler(
+  filename = function() {
+    paste("logements_data", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(logements_data(), file, row.names = FALSE)
+  }
+)
+
+# Calculer le coefficient de corrélation et afficher le nuage de points avec la droite de régression
+output$correlation <- renderText({
+  req(logements_data())  # Vérifier que les données sont disponibles
+  data <- logements_data()
+  
+  x_var <- input$x_var_reg
+  y_var <- input$y_var_reg
+  
+  # Calculer le coefficient de corrélation
+  correlation_value <- cor(data[[x_var]], data[[y_var]], use = "complete.obs")
+  
+  paste("Coefficient de corrélation (", x_var, " vs ", y_var, ") : ", round(correlation_value, 2))
+})
+
+output$regression_plot <- renderPlot({
+  req(logements_data())  # Vérifier que les données sont disponibles
+  data <- logements_data()
+  
+  x_var <- input$x_var_reg
+  y_var <- input$y_var_reg
+  
+  # Créer le modèle de régression linéaire
+  model <- lm(data[[y_var]] ~ data[[x_var]], data = data)
+  
+  # Tracer le nuage de points et la droite de régression
+  ggplot(data, aes_string(x = x_var, y = y_var)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
+    labs(title = "Nuage de points avec droite de régression",
+         x = x_var,
+         y = y_var)
+})
+}
 
 
 # Lancer l'application
