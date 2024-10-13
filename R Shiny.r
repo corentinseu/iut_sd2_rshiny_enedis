@@ -1,4 +1,6 @@
 # Chargement des librairies
+#install.packages(c( "shiny","shinydashboard","shinythemes","leaflet","ggplot2","plotly","DT","shinyjs","httr","jsonlite","shinymanager","webshot","htmltools",sf"))
+
 library(shiny)
 library(shinydashboard)
 library(shinythemes)
@@ -14,10 +16,9 @@ library(webshot)
 library(htmltools)
 library(sf)
 
-# Création des utilisateurs pour l'authentification
 credentials <- data.frame(
-  user = c("admin", "user"),
-  password = c("adminpass", "userpass"),
+  user = c("user1", "user2"),   # Ajoutez vos utilisateurs ici
+  password = c("password1", "password2"),  # Mots de passe associés
   stringsAsFactors = FALSE
 )
 
@@ -122,7 +123,7 @@ get_logements_data <- function() {
 }
 
 # UI de l'application
-ui <- dashboardPage(
+ui <- secure_app(dashboardPage(
   dashboardHeader(title = "Application DPE"),
   dashboardSidebar(
     sidebarMenu(
@@ -135,7 +136,32 @@ ui <- dashboardPage(
   ),
   dashboardBody(
     useShinyjs(),
-    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")),
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")), # Lien vers le fichier CSS
+    tags$head(tags$script(HTML("
+  function applyTheme(theme) {
+    // Retirer l'ancien style
+    var oldStyle = document.getElementById('themeStyles');
+    if (oldStyle) {
+      oldStyle.remove();
+    }
+
+    // Ajouter le nouveau style
+    let css = '';
+    if (theme === 'blue') {
+      css = 'body { background-color: #007bff; color: white; } .box { background-color: #007bff; }';
+    } else if (theme === 'red') {
+      css = 'body { background-color: #dc3545; color: white; } .box { background-color: #dc3545; }';
+    } else if (theme === 'orange') {
+      css = 'body { background-color: #fd7e14; color: white; } .box { background-color: #fd7e14; }';
+    } else if (theme === 'gray') {
+      css = 'body { background-color: #6c757d; color: white; } .box { background-color: #6c757d; }';
+    }
+
+    // Injecter le CSS
+    document.head.insertAdjacentHTML('beforeend', '<style id=\"themeStyles\">' + css + '</style>');
+  }
+")))
+    ,
     tabItems(
       # Onglet Contexte
       tabItem(tabName = "contexte",
@@ -188,7 +214,7 @@ ui <- dashboardPage(
       )
     )
   )
-)
+))
 
 # Serveur de l'application
 server <- function(input, output, session) {
@@ -197,6 +223,14 @@ server <- function(input, output, session) {
   
   # Chargement des données initiales
   logements_data <- reactiveVal(get_logements_data())
+  
+  # Appliquer le thème lors de la sélection dans l'onglet Paramètres
+  observeEvent(input$apply_theme, {
+    theme <- input$theme_color
+    js_code <- sprintf("applyTheme('%s');", theme)
+    shinyjs::runjs(js_code)  # Exécuter le JS pour appliquer le thème
+  })
+  
   
   # Afficher la table des données dans l'onglet Contexte
   output$table_donnees <- renderDT({
@@ -364,7 +398,6 @@ output$regression_plot <- renderPlot({
          y = y_var)
 })
 }
-
 
 # Lancer l'application
 shinyApp(ui, server)
