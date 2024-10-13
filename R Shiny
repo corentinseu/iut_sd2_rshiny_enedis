@@ -1,5 +1,5 @@
 # Installation et chargement des bibliothèques nécessaires
-install.packages(c("httr", "jsonlite"))
+install.packages(c("httr", "jsonlite", "shiny", "shinydashboard", "leaflet", "plotly", "DT", "shinyWidgets"))
 library(shiny)
 library(shinydashboard)
 library(leaflet)
@@ -45,7 +45,11 @@ load_logement_data <- function() {
       df <- content$result
       if (!is.null(df)) {
         logement_existant <- rbind(logement_existant, as.data.frame(df))
+      } else {
+        showNotification(paste("Pas de données pour le code postal", valeur), type = "warning")
       }
+    } else {
+      showNotification(paste("Erreur API pour le code postal", valeur), type = "error")
     }
   }
   
@@ -69,7 +73,11 @@ load_logement_data <- function() {
       df <- content$result
       if (!is.null(df)) {
         logement_neuf <- rbind(logement_neuf, as.data.frame(df))
+      } else {
+        showNotification(paste("Pas de données pour le code postal", valeur), type = "warning")
       }
+    } else {
+      showNotification(paste("Erreur API pour le code postal", valeur), type = "error")
     }
   }
   
@@ -82,6 +90,12 @@ load_logement_data <- function() {
   colonnes_communes <- intersect(colnames_neuf, colnames_existant)
   
   logements <- rbind(logement_neuf[, colonnes_communes], logement_existant[, colonnes_communes])
+  
+  # Vérification des coordonnées manquantes
+  if (any(is.na(logements$`Coordonnée_cartographique_X_(BAN)`) | is.na(logements$`Coordonnée_cartographique_Y_(BAN)`))) {
+    showNotification("Certaines coordonnées sont manquantes dans les données.", type = "warning")
+  }
+  
   return(logements)
 }
 
@@ -137,14 +151,13 @@ ui <- dashboardPage(
   )
 )
 
-
 # Serveur
 server <- function(input, output, session) {
   # Charger les données au démarrage
   logements <- reactive({
     load_logement_data()
   })
-
+  
   # Contexte - Tableau et boxplot
   output$data_table <- renderDT({
     datatable(logements())
@@ -156,9 +169,16 @@ server <- function(input, output, session) {
   
   # Cartographie - Leaflet Map
   output$map <- renderLeaflet({
+    validate(
+      need(nrow(logements()) > 0, "Pas de données disponibles pour la cartographie."),
+      need(!any(is.na(logements()$`Coordonnée_cartographique_X_(BAN)`) | 
+                  is.na(logements()$`Coordonnée_cartographique_Y_(BAN)`)),
+           "Coordonnées manquantes.")
+    )
+    
     leaflet(logements()) %>%
       addTiles() %>%
-      setView(lng = 1.8883, lat = 46.6034, zoom = 6) %>%  # Centre sur la France
+      setView(lng = 1.8883, lat = 46.6034, zoom = 6) %>%
       addMarkers(lng = ~`Coordonnée_cartographique_X_(BAN)`,
                  lat = ~`Coordonnée_cartographique_Y_(BAN)`,
                  popup = ~paste("Coût Total:", `Coût_total_5_usages`, "<br> Type de bâtiment:", `Type_bâtiment`))
@@ -185,6 +205,22 @@ server <- function(input, output, session) {
   observeEvent(input$rafraichir, {
     updateSelectInput(session, "theme", selected = input$theme)
   })
+  
+  # Mise à jour des filtres de l'UI
+  observe({
+    updateSelectInput(session, "type_batiment", choices = unique(logements()$`Type_bâtiment`))
+    updateCheckboxGroupInput(session, "etiquette_dpe", choices = unique(logements()$`Etiquette_DPE`))
+  })
+  
+  # Exportation CSV
+  output$export_csv <- downloadHandler(
+    filename = function() {
+      paste("logements_data_", Sys.Date(), ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(logements(), file)
+    }
+  )
 }
 
 # Lancer l'application
