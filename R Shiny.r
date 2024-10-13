@@ -1,16 +1,27 @@
-# Installation et chargement des bibliothèques nécessaires
-install.packages(c("httr", "jsonlite", "shiny", "shinydashboard", "leaflet", "plotly", "DT", "shinyWidgets"))
+# Chargement des librairies
 library(shiny)
 library(shinydashboard)
+library(shinythemes)
 library(leaflet)
+library(ggplot2)
 library(plotly)
 library(DT)
-library(shinyWidgets)
+library(shinyjs)
 library(httr)
 library(jsonlite)
+library(shinymanager)  # Pour l'authentification
 
-# Fonction pour charger les données via l'API
-load_logement_data <- function() {
+# Création des utilisateurs pour l'authentification
+credentials <- data.frame(
+  user = c("admin", "user"), # Ajouter plus d'utilisateurs ici
+  password = c("adminpass", "userpass"), # Mots de passe correspondants
+  stringsAsFactors = FALSE
+)
+
+# Fonction pour récupérer les données à partir de l'API
+get_logements_data <- function() {
+  
+  # Création d'un vecteur avec les codes postaux du Rhône
   codes_postaux_69 <- c(
     69001, 69002, 69003, 69004, 69005, 69006, 69007, 69008, 69009,
     69100, 69110, 69120, 69140, 69160, 69170, 69190, 69200,
@@ -21,12 +32,11 @@ load_logement_data <- function() {
     69620, 69630, 69640, 69650, 69660, 69670, 69680, 69690
   )
   
-  # Initialisation des dataframes vides
   logement_existant <- data.frame()
   logement_neuf <- data.frame()
   
-  # Charger les données pour les logements existants
-  for (valeur in codes_postaux_69) {
+  # Boucle pour chaque code postal (logements existants)
+  for(valeur in codes_postaux_69){
     base_url <- "https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines"
     params <- list(
       page = 1,
@@ -39,22 +49,16 @@ load_logement_data <- function() {
     
     url_encoded <- modify_url(base_url, query = params)
     response <- GET(url_encoded)
+    content <- fromJSON(rawToChar(response$content), flatten = FALSE)
     
-    if (status_code(response) == 200) {
-      content <- fromJSON(rawToChar(response$content), flatten = FALSE)
-      df <- content$result
-      if (!is.null(df)) {
-        logement_existant <- rbind(logement_existant, as.data.frame(df))
-      } else {
-        showNotification(paste("Pas de données pour le code postal", valeur), type = "warning")
-      }
-    } else {
-      showNotification(paste("Erreur API pour le code postal", valeur), type = "error")
+    df <- content$result
+    if (!is.null(df)) {
+      logement_existant <- rbind(logement_existant, as.data.frame(df))
     }
   }
   
-  # Charger les données pour les logements neufs
-  for (valeur in codes_postaux_69) {
+  # Boucle pour chaque code postal (logements neufs)
+  for(valeur in codes_postaux_69){
     base_url <- "https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-neufs/lines"
     params <- list(
       page = 1,
@@ -67,160 +71,113 @@ load_logement_data <- function() {
     
     url_encoded <- modify_url(base_url, query = params)
     response <- GET(url_encoded)
+    content <- fromJSON(rawToChar(response$content), flatten = FALSE)
     
-    if (status_code(response) == 200) {
-      content <- fromJSON(rawToChar(response$content), flatten = FALSE)
-      df <- content$result
-      if (!is.null(df)) {
-        logement_neuf <- rbind(logement_neuf, as.data.frame(df))
-      } else {
-        showNotification(paste("Pas de données pour le code postal", valeur), type = "warning")
-      }
-    } else {
-      showNotification(paste("Erreur API pour le code postal", valeur), type = "error")
+    df <- content$result
+    if (!is.null(df)) {
+      logement_neuf <- rbind(logement_neuf, as.data.frame(df))
     }
   }
   
-  # Ajout de la colonne "Logement" et fusion des datasets
-  logement_neuf$Logement <- "Neuf"
-  logement_existant$Logement <- "Ancien"
+  logement_neuf$Logement = "Neuf"
+  logement_existant$Logement = "Ancien"
   
-  colnames_neuf <- colnames(logement_neuf)
-  colnames_existant <- colnames(logement_existant)
-  colonnes_communes <- intersect(colnames_neuf, colnames_existant)
+  # Conversion des dates et types
+  logement_neuf$Année_construction = Sys.Date()
+  logement_neuf$Année_construction = format(logement_neuf$Année_construction, "%Y")
+  logement_neuf$Année_construction = as.numeric(logement_neuf$Année_construction)
   
-  logements <- rbind(logement_neuf[, colonnes_communes], logement_existant[, colonnes_communes])
-  
-  # Vérification des coordonnées manquantes
-  if (any(is.na(logements$`Coordonnée_cartographique_X_(BAN)`) | is.na(logements$`Coordonnée_cartographique_Y_(BAN)`))) {
-    showNotification("Certaines coordonnées sont manquantes dans les données.", type = "warning")
-  }
+  # Fusionner les données
+  colonnes_communes = intersect(colnames(logement_neuf), colnames(logement_existant))
+  logements = rbind(logement_neuf[, colonnes_communes], logement_existant[, colonnes_communes])
   
   return(logements)
 }
 
-# Interface utilisateur (UI)
+# UI de l'application
 ui <- dashboardPage(
-  skin = "blue",
-  dashboardHeader(title = "Application Logements"),
-  
+  dashboardHeader(title = "Application DPE"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Cartographie", tabName = "cartographie", icon = icon("map")),
       menuItem("Contexte", tabName = "contexte", icon = icon("info-circle")),
-      menuItem("Analyse", tabName = "analyse", icon = icon("chart-line")),
-      menuItem("Paramètres", tabName = "parametres", icon = icon("cogs"))
+      menuItem("Visualisations", tabName = "visualisations", icon = icon("chart-bar")),
+      menuItem("Cartographie", tabName = "cartographie", icon = icon("map")),
+      menuItem("Paramètres", tabName = "parametres", icon = icon("sliders-h"))
     )
   ),
-  
   dashboardBody(
+    useShinyjs(),
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")),
     tabItems(
-      
-      tabItem(tabName = "cartographie",
-              h2("Carte interactive"),
-              leafletOutput("map"),
-              selectInput("type_batiment", "Type de bâtiment", choices = NULL),
-              checkboxGroupInput("etiquette_dpe", "Etiquette DPE", choices = NULL)
-      ),
-      
+      # Onglet Contexte
       tabItem(tabName = "contexte",
-              h2("Présentation des données"),
-              DTOutput("data_table"),
-              sliderInput("score_slider", "Filtrer par score DPE", min = 0, max = 100, value = c(0, 100)),
-              plotlyOutput("boxplot"),
-              downloadButton("export_csv", "Exporter les données")
+              h2("Présentation des données disponibles"),
+              DTOutput("table_donnees")
       ),
-      
-      tabItem(tabName = "analyse",
-              h2("Analyse des corrélations"),
-              selectInput("var_x", "Variable X", choices = NULL),
-              selectInput("var_y", "Variable Y", choices = NULL),
+      # Onglet Visualisations
+      tabItem(tabName = "visualisations",
+              h2("Graphiques interactifs"),
+              selectInput("x_var", "Sélectionner la variable X", choices = c("Coût_total_5_usages", "Coût_chauffage")),
+              selectInput("y_var", "Sélectionner la variable Y", choices = c("Coût_ECS", "Coût_refroidissement")),
               plotlyOutput("scatterplot"),
-              textOutput("correlation"),
-              actionButton("regression", "Afficher la régression linéaire")
+              radioButtons("theme", "Choisir le thème",
+                           choices = c("Default", "Cerulean", "Journal", "Flatly")),
+              downloadButton("downloadGraph", "Exporter le graphique")
       ),
-      
+      # Onglet Cartographie
+      tabItem(tabName = "cartographie",
+              h2("Carte interactive des logements"),
+              leafletOutput("map"),
+              checkboxGroupInput("logement_type", "Type de logement",
+                                 choices = c("Neuf", "Ancien")),
+              sliderInput("annee", "Année de construction", 
+                          min = 1900, max = 2023, value = c(2000, 2023)),
+              downloadButton("downloadData", "Exporter les données filtrées")
+      ),
+      # Onglet Paramètres pour rafraîchir les données via l'API
       tabItem(tabName = "parametres",
-              h2("Personnalisation de l'application"),
-              selectInput("theme", "Choisir un thème", choices = c("blue", "black", "green")),
-              actionButton("rafraichir", "Rafraîchir les données"),
-              passwordInput("password", "Mot de passe"),
-              actionButton("connexion", "Connexion")
+              actionButton("refresh_data", "Rafraîchir les données")
       )
     )
   )
 )
 
-# Serveur
+# Serveur de l'application
 server <- function(input, output, session) {
-  # Charger les données au démarrage
-  logements <- reactive({
-    load_logement_data()
+  
+  # Authentification
+  res_auth <- secure_server(check_credentials = check_credentials(credentials))
+  
+  # Chargement des données initiales (logements existants + neufs)
+  logements_data <- reactiveVal(get_logements_data())
+  
+  # Présentation des données dans l'onglet Contexte
+  output$table_donnees <- renderDT({
+    datatable(logements_data())
   })
   
-  # Contexte - Tableau et boxplot
-  output$data_table <- renderDT({
-    datatable(logements())
-  })
-  
-  output$boxplot <- renderPlotly({
-    plot_ly(logements(), y = ~Coût_chauffage, type = "box")
-  })
-  
-  # Cartographie - Leaflet Map
-  output$map <- renderLeaflet({
-    validate(
-      need(nrow(logements()) > 0, "Pas de données disponibles pour la cartographie."),
-      need(!any(is.na(logements()$`Coordonnée_cartographique_X_(BAN)`) | 
-                  is.na(logements()$`Coordonnée_cartographique_Y_(BAN)`)),
-           "Coordonnées manquantes.")
-    )
-    
-    leaflet(logements()) %>%
-      addTiles() %>%
-      setView(lng = 1.8883, lat = 46.6034, zoom = 6) %>%
-      addMarkers(lng = ~`Coordonnée_cartographique_X_(BAN)`,
-                 lat = ~`Coordonnée_cartographique_Y_(BAN)`,
-                 popup = ~paste("Coût Total:", `Coût_total_5_usages`, "<br> Type de bâtiment:", `Type_bâtiment`))
-  })
-  
-  # Analyse - Scatter plot et régression
+  # Graphique interactif dans l'onglet Visualisations
   output$scatterplot <- renderPlotly({
-    plot_ly(logements(), x = ~logements()[[input$var_x]], y = ~logements()[[input$var_y]], mode = "markers")
+    x_var <- input$x_var
+    y_var <- input$y_var
+    plot_ly(data = logements_data(), x = ~get(x_var), y = ~get(y_var), type = "scatter", mode = "markers") %>%
+      layout(title = paste("Nuage de points entre", x_var, "et", y_var))
   })
   
-  output$correlation <- renderText({
-    corr <- cor(logements()[[input$var_x]], logements()[[input$var_y]], use = "complete.obs")
-    paste("Coefficient de corrélation: ", round(corr, 2))
+  # Carte interactive dans l'onglet Cartographie
+  output$map <- renderLeaflet({
+    leaflet(data = logements_data()) %>%
+      addTiles() %>%
+      addCircleMarkers(~Coordonnée_cartographique_X_(BAN), ~Coordonnée_cartographique_Y_(BAN),
+                       color = ~ifelse(Logement == "Neuf", "blue", "red"),
+                       popup = ~paste("Type:", Logement))
   })
   
-  observeEvent(input$regression, {
-    output$scatterplot <- renderPlotly({
-      plot_ly(logements(), x = ~logements()[[input$var_x]], y = ~logements()[[input$var_y]], mode = "markers") %>%
-        add_lines(x = ~logements()[[input$var_x]], y = fitted(lm(logements()[[input$var_y]] ~ logements()[[input$var_x]])))
-    })
+  # Bouton pour rafraîchir les données
+  observeEvent(input$refresh_data, {
+    new_data <- get_logements_data()
+    logements_data(new_data)
   })
-  
-  # Paramètres - Rafraîchir le thème
-  observeEvent(input$rafraichir, {
-    updateSelectInput(session, "theme", selected = input$theme)
-  })
-  
-  # Mise à jour des filtres de l'UI
-  observe({
-    updateSelectInput(session, "type_batiment", choices = unique(logements()$`Type_bâtiment`))
-    updateCheckboxGroupInput(session, "etiquette_dpe", choices = unique(logements()$`Etiquette_DPE`))
-  })
-  
-  # Exportation CSV
-  output$export_csv <- downloadHandler(
-    filename = function() {
-      paste("logements_data_", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      write.csv(logements(), file)
-    }
-  )
 }
 
 # Lancer l'application
