@@ -1,0 +1,124 @@
+/* Default Theme */
+body {
+  background-color: #f8f9fa;
+  color: #212529;
+}
+
+.box {
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+}
+
+.content-wrapper {
+  background-color: #f8f9fa;
+}
+
+.sidebar {
+  background-color: #343a40;
+  color: #ffffff;
+}
+
+.sidebar .sidebar-menu .treeview-menu {
+  background-color: #3c4043;
+}
+
+.sidebar .sidebar-menu li a {
+  color: #ffffff;
+}
+
+.sidebar .sidebar-menu li a:hover {
+  background-color: #495057;
+}
+
+.main-header .navbar {
+  background-color: #007bff;
+  color: white;
+}
+
+.main-header .navbar .sidebar-toggle:hover {
+  background-color: #0056b3;
+}
+
+/* Theme Rouge */
+body.theme-rouge {
+  background-color: #dc3545;
+  color: white;
+}
+
+.box.theme-rouge {
+  background-color: #dc3545;
+  color: white;
+  border: 1px solid #c82333;
+}
+
+.sidebar.theme-rouge {
+  background-color: #c82333;
+}
+
+.sidebar.theme-rouge .sidebar-menu li a {
+  color: white;
+}
+
+.sidebar.theme-rouge .sidebar-menu li a:hover {
+  background-color: #bd2130;
+}
+
+.main-header.theme-rouge .navbar {
+  background-color: #c82333;
+}
+
+/* Theme Orange */
+body.theme-orange {
+  background-color: #fd7e14;
+  color: white;
+}
+
+.box.theme-orange {
+  background-color: #fd7e14;
+  color: white;
+  border: 1px solid #e8590c;
+}
+
+.sidebar.theme-orange {
+  background-color: #e8590c;
+}
+
+.sidebar.theme-orange .sidebar-menu li a {
+  color: white;
+}
+
+.sidebar.theme-orange .sidebar-menu li a:hover {
+  background-color: #d9480f;
+}
+
+.main-header.theme-orange .navbar {
+  background-color: #e8590c;
+}
+
+/* Theme Gris */
+body.theme-gris {
+  background-color: #6c757d;
+  color: white;
+}
+
+.box.theme-gris {
+  background-color: #6c757d;
+  color: white;
+  border: 1px solid #5a6268;
+}
+
+.sidebar.theme-gris {
+  background-color: #5a6268;
+}
+
+.sidebar.theme-gris .sidebar-menu li a {
+  color: white;
+}
+
+.sidebar.theme-gris .sidebar-menu li a:hover {
+  background-color: #495057;
+}
+
+.main-header.theme-gris .navbar {
+  background-color: #5a6268;
+}
