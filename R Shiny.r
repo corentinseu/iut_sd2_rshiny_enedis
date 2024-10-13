@@ -122,9 +122,17 @@ get_logements_data <- function() {
   return(logements)
 }
 
+image_url = "https://www.fournisseurs-electricite.com/sites/fournisseurs-electricite.com/files/2019-12/enedis-presentation.png"
+
 # UI de l'application
-ui <- secure_app(dashboardPage(
-  dashboardHeader(title = "Application DPE"),
+ui <- secure_app(
+  dashboardPage(
+  dashboardHeader(
+    title = tags$div(
+      tags$img(src = image_url, alt = "Logo de l'application DPE", height = "50px"), 
+      style = "display: inline-block; vertical-align: middle;"
+    )
+  ),
   dashboardSidebar(
     sidebarMenu(
       menuItem("Contexte", tabName = "contexte", icon = icon("info-circle")),
