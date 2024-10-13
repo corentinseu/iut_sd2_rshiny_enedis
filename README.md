@@ -7,5 +7,6 @@ Nous sommes Greentech Solutions une société de service fictive qui crée des a
 Ce repository contient les fichiers suivants:
 
 app.R : L'application R Shiny executé grace au script R.
-documentation_technique : documentation orientée développeur avec schéma de l'architecture.
-documentation_fonctionnelle : documentation fonctionnelle orientée utilisateur.
+styles.css : Fichier de thème CSS
+documentation technique.pdf : documentation orientée développeur avec schéma de l'architecture.
+documentation fonctionnelle.pdf : documentation fonctionnelle orientée utilisateur.
