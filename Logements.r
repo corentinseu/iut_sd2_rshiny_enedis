@@ -15,7 +15,7 @@ codes_postaux_69 <- c(
 # Initialiser un dataframe vide pour stocker tous les résultats
 logement_existant <- data.frame()
 
-# Loop through each postal code in the 'code_postaux' dataframe
+# Boucle à travers le dataframe 'code_postaux_69'
 for(valeur in codes_postaux_69){
   base_url <- "https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines"
   
@@ -62,7 +62,7 @@ View(logement_existant)
 
 logement_neuf <- data.frame()
 
-# Loop through each postal code in the 'code_postaux' dataframe
+# Boucle à travers le dataframe 'code_postaux_69'
 for(valeur in codes_postaux_69){
   base_url <- "https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-neufs/lines"
   
